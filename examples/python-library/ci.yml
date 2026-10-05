@@ -1,0 +1,29 @@
+---
+name: "CI"
+concurrency:  # Cancel any existing runs of this workflow for this same PR
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+on:  # yamllint disable-line rule:truthy rule:comments
+  push:
+    branches:
+      - "main"
+      - "develop"
+  pull_request: ~
+
+jobs:
+  ci:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-ci.yml@v1"
+    with:
+      project_type: "python-library"
+      project_name: "netutils"
+      # Optional overrides (defaults shown):
+      # invoke_context_name: "NETUTILS"
+      # min_python_version: "3.10"
+      # max_python_version: "3.14"
+      # python_versions: '["3.10", "3.14"]'
+      # poetry_version: "2.1.3"
+      # regenerate_lockfile: "false"
+      # check_docs: true
+      # Add mypy for typed libraries:
+      lint_checks: >-
+        ["ruff-format", "ruff-lint", "yamllint", "mypy"]

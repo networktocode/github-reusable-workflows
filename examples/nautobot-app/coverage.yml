@@ -1,0 +1,16 @@
+---
+name: "Post coverage comment"
+
+on:  # yamllint disable-line rule:truthy rule:comments
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - "completed"
+
+jobs:
+  coverage:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-coverage.yml@v1"
+    permissions:
+      pull-requests: "write"
+      contents: "write"
+      actions: "read"

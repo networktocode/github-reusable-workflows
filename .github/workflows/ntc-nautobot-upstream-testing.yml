@@ -1,0 +1,60 @@
+---
+# Reusable wrapper around Nautobot's own reusable upstream-testing workflow. It runs the app's unit tests
+# and migration checks against in-development Nautobot branches so breakage is caught before a Nautobot release.
+#
+# Call it from a repo's .github/workflows/upstream_testing.yml on a schedule and `workflow_dispatch`.
+name: "NTC Nautobot App Upstream Testing"
+
+on:  # yamllint disable-line rule:truthy rule:comments
+  workflow_call:
+    inputs:
+      project_name:
+        description: "Distribution name of the app (e.g. nautobot-golden-config)."
+        required: true
+        type: "string"
+      invoke_context_name:
+        description: "Invoke context name used for INVOKE_<NAME>_* env vars. Defaults to project_name upper-cased with '-' replaced by '_'."
+        required: false
+        type: "string"
+        default: ""
+      matrix:
+        description: "JSON list of {nautobot_branch, app_branch} pairs to test."
+        required: false
+        type: "string"
+        default: >-
+          [
+            {"nautobot_branch": "develop", "app_branch": "main"},
+            {"nautobot_branch": "next", "app_branch": "main"}
+          ]
+
+jobs:
+  config:
+    name: "Resolve configuration"
+    runs-on: "ubuntu-latest"
+    outputs:
+      invoke_context_name: "${{ steps.resolve.outputs.invoke_context_name }}"
+    steps:
+      - name: "Resolve invoke context"
+        id: "resolve"
+        env:
+          PROJECT_NAME: "${{ inputs.project_name }}"
+          INVOKE_CONTEXT_NAME: "${{ inputs.invoke_context_name }}"
+        run: |
+          if [ -z "$INVOKE_CONTEXT_NAME" ]; then
+            INVOKE_CONTEXT_NAME=$(echo "$PROJECT_NAME" | tr '[:lower:]-' '[:upper:]_')
+          fi
+          echo "invoke_context_name=$INVOKE_CONTEXT_NAME" >> "$GITHUB_OUTPUT"
+
+  upstream-test:
+    name: "Nautobot ${{ matrix.nautobot_branch }} / app ${{ matrix.app_branch }}"
+    needs: "config"
+    strategy:
+      fail-fast: false
+      matrix:
+        include: "${{ fromJSON(inputs.matrix) }}"
+    uses: "nautobot/nautobot/.github/workflows/plugin_upstream_testing_base.yml@develop"
+    with:
+      invoke_context_name: "${{ needs.config.outputs.invoke_context_name }}"
+      app_name: "${{ inputs.project_name }}"
+      nautobot_branch: "${{ matrix.nautobot_branch }}"
+      app_branch: "${{ matrix.app_branch }}"

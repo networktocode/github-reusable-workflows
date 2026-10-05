@@ -1,0 +1,19 @@
+---
+name: "Nautobot Upstream Monitor"
+
+on:  # yamllint disable-line rule:truthy rule:comments
+  schedule:
+    - cron: "0 4 */2 * *"  # every other day at 4 AM
+  workflow_dispatch:
+
+jobs:
+  upstream-test:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-nautobot-upstream-testing.yml@v1"
+    with:
+      project_name: "nautobot-golden-config"
+      matrix: >-
+        [
+          {"nautobot_branch": "develop", "app_branch": "main"},
+          {"nautobot_branch": "next", "app_branch": "main"},
+          {"nautobot_branch": "ltm-2.4", "app_branch": "ltm-2.4"}
+        ]

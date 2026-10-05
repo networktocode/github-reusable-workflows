@@ -1,0 +1,392 @@
+---
+# Reusable workflow that builds and publishes a project when a GitHub release is published, then opens the
+# post-release merge-back PRs. Works for Nautobot apps and plain Python libraries.
+#
+# Call it from a repo's .github/workflows/release.yml on `release: published`.
+# The caller MUST grant: contents: write, pull-requests: write, id-token: write.
+#
+# PyPI Trusted Publishing keeps working unchanged: PyPI validates the *calling* workflow's filename
+# (release.yml) and the environment, not the reusable workflow's filename.
+name: "NTC Release"
+
+on:  # yamllint disable-line rule:truthy rule:comments
+  workflow_call:
+    inputs:
+      poetry_version:
+        description: "Poetry version to install on the runners."
+        required: false
+        type: "string"
+        default: "2.1.3"
+      python_version:
+        description: "Python version used to build the package and docs."
+        required: false
+        type: "string"
+        default: "3.12"
+      publish_target:
+        description: "Where to publish the package: 'pypi' (Trusted Publishing) or 'artifactory' (Poetry publish with credentials)."
+        required: false
+        type: "string"
+        default: "pypi"
+      publish_environment:
+        description: "GitHub environment the publish job runs in (must match the PyPI Trusted Publisher config)."
+        required: false
+        type: "string"
+        default: "pypi"
+      artifactory_url:
+        description: "Artifactory repository URL. Required when publish_target is 'artifactory'."
+        required: false
+        type: "string"
+        default: ""
+      build_docs:
+        description: "Run 'invoke build-and-check-docs' before building the package (libraries published on Read the Docs set false)."
+        required: false
+        type: "boolean"
+        default: true
+      release_notes_path:
+        description: "Path of the release notes directory synced from ltm-* branches to develop."
+        required: false
+        type: "string"
+        default: "docs/admin/release_notes/"
+    secrets:
+      GH_BOT_TOKEN:
+        description: "Personal access token of a bot user. Optional; without it GITHUB_TOKEN is used and the post-release PRs do not trigger workflows."
+        required: false
+      SLACK_WEBHOOK_URL:
+        description: "Slack incoming webhook URL for the new-release notification. Skipped when empty."
+        required: false
+      ARTIFACTORY_USERNAME:
+        description: "Commercial projects only: Artifactory username (used for the private Poetry source and for publishing)."
+        required: false
+      ARTIFACTORY_PASSWORD:
+        description: "Commercial projects only: Artifactory password (used for the private Poetry source and for publishing)."
+        required: false
+
+env:
+  # Empty for OSS projects; Poetry only uses them when pyproject.toml declares an "artifactory-pypi" source.
+  POETRY_HTTP_BASIC_ARTIFACTORY_PYPI_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+  POETRY_HTTP_BASIC_ARTIFACTORY_PYPI_PASSWORD: "${{ secrets.ARTIFACTORY_PASSWORD }}"
+
+jobs:
+  build:
+    name: "Build package with poetry"
+    runs-on: "ubuntu-latest"
+    if: "startsWith(github.ref, 'refs/tags/v')"
+    steps:
+      - name: "Validate inputs"
+        env:
+          PUBLISH_TARGET: "${{ inputs.publish_target }}"
+          ARTIFACTORY_URL: "${{ inputs.artifactory_url }}"
+        run: |
+          case "$PUBLISH_TARGET" in
+            pypi) ;;
+            artifactory)
+              if [ -z "$ARTIFACTORY_URL" ]; then
+                echo "::error::artifactory_url is required when publish_target is 'artifactory'"
+                exit 1
+              fi
+              ;;
+            *) echo "::error::publish_target must be 'pypi' or 'artifactory' (got '$PUBLISH_TARGET')"; exit 1 ;;
+          esac
+      - uses: "actions/checkout@v7"
+      - name: "Setup environment"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        with:
+          poetry-version: "${{ inputs.poetry_version }}"
+          python-version: "${{ inputs.python_version }}"
+          poetry-install-options: "--no-root"
+      - name: "Build Documentation"
+        if: "inputs.build_docs"
+        run: "poetry run invoke build-and-check-docs"
+      - name: "Run Poetry Build"
+        run: "poetry build"
+
+      - name: "Check that the release tag matches the version in pyproject.toml"
+        run: |
+          if [ "${{ github.ref_name }}" != "v$(poetry version -s)" ]; then
+            echo "::error::Release tag ${{ github.ref_name }} does not match pyproject.toml version $(poetry version -s)"
+            exit 1
+          fi
+
+      - uses: "actions/upload-artifact@v4"
+        with:
+          name: "distfiles"
+          path: "dist/"
+          if-no-files-found: "error"
+
+  publish-github:
+    name: "Publish to GitHub"
+    runs-on: "ubuntu-latest"
+    if: "startsWith(github.ref, 'refs/tags/v')"
+    permissions:
+      contents: "write"
+    needs: "build"
+    steps:
+      - uses: "actions/checkout@v7"
+      - name: "Retrieve built package from cache"
+        uses: "actions/download-artifact@v4"
+        with:
+          name: "distfiles"
+          path: "dist/"
+
+      - name: "Upload binaries to release"
+        run: "gh release upload ${{ github.ref_name }} dist/*.{tar.gz,whl}"
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+  publish-package:
+    name: "Push Package to ${{ inputs.publish_target == 'pypi' && 'PyPI' || 'JFrog Artifactory' }}"
+    runs-on: "ubuntu-latest"
+    if: "startsWith(github.ref, 'refs/tags/v')"
+    needs: "build"
+    environment: "${{ inputs.publish_environment }}"
+    permissions:
+      # IMPORTANT: this permission is mandatory for PyPI Trusted Publishing
+      id-token: "write"
+    steps:
+      - name: "Retrieve built package from cache"
+        uses: "actions/download-artifact@v4"
+        with:
+          name: "distfiles"
+          path: "dist/"
+
+      - name: "Publish package distributions to PyPI"
+        if: "inputs.publish_target == 'pypi'"
+        uses: "pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e"  # v1.13.0
+
+      - name: "Check out repository code"
+        if: "inputs.publish_target == 'artifactory'"
+        uses: "actions/checkout@v7"
+      - name: "Setup environment"
+        if: "inputs.publish_target == 'artifactory'"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        with:
+          poetry-version: "${{ inputs.poetry_version }}"
+          python-version: "${{ inputs.python_version }}"
+          poetry-install-options: "--dry-run"
+      - name: "Publish package distributions to JFrog Artifactory"
+        if: "inputs.publish_target == 'artifactory'"
+        env:
+          POETRY_REPOSITORIES_ARTIFACTORY_URL: "${{ inputs.artifactory_url }}"
+          POETRY_HTTP_BASIC_ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          POETRY_HTTP_BASIC_ARTIFACTORY_PASSWORD: "${{ secrets.ARTIFACTORY_PASSWORD }}"
+        run: "poetry publish --repository artifactory --dist-dir dist"
+
+  slack-notify:
+    name: "Notify Slack"
+    needs:
+      - "publish-github"
+      - "publish-package"
+    runs-on: "ubuntu-latest"
+    env:
+      # Secrets cannot be directly referenced in if: conditionals. They must be set as a job env var first.
+      # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-using-secrets
+      SLACK_WEBHOOK_URL: "${{ secrets.SLACK_WEBHOOK_URL }}"
+      SLACK_WEBHOOK_TYPE: "INCOMING_WEBHOOK"
+      SLACK_MESSAGE: >-
+        *NOTIFICATION: NEW-RELEASE-PUBLISHED*\n
+        Repository: <${{ github.server_url }}/${{ github.repository }}|${{ github.repository }}>\n
+        Release: <${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}|${{ github.ref_name }}>\n
+        Published by: <${{ github.server_url }}/${{ github.actor }}|${{ github.actor }}>
+    steps:
+      - name: "Send a notification to Slack"
+        if: "${{ env.SLACK_WEBHOOK_URL != '' }}"
+        uses: "slackapi/slack-github-action@fcfb566f8b0aab22203f066d80ca1d7e4b5d05b3"  # v1.27.1
+        with:
+          payload: |
+            {
+              "text": "${{ env.SLACK_MESSAGE }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "${{ env.SLACK_MESSAGE }}"
+                  }
+                }
+              ]
+            }
+
+  create-post-release-pr:
+    if: "contains(fromJSON('[\"main\", \"develop\"]'), github.event.release.target_commitish) || startsWith(github.event.release.target_commitish, 'next') || startsWith(github.event.release.target_commitish, 'ltm-')"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    name: "${{ github.event.release.target_commitish == 'main' && 'Create a PR from main into develop' || format('Create a PR to merge into {0}', github.event.release.target_commitish) }}"
+    needs:
+      - "publish-github"
+      - "publish-package"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout source branch"
+        uses: "actions/checkout@v7"
+        with:
+          ref: "${{ github.event.release.target_commitish }}"
+          fetch-depth: 0
+
+      - name: "Setup environment"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        with:
+          poetry-version: "${{ inputs.poetry_version }}"
+          poetry-install-options: "--no-root"
+
+      - name: "Create release branch and bump version"
+        id: "branch"
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+          SOURCE_BRANCH="${{ github.event.release.target_commitish }}"
+          if [ "$SOURCE_BRANCH" = "main" ]; then
+            TARGET_BRANCH="develop"
+          else
+            TARGET_BRANCH="$SOURCE_BRANCH"
+          fi
+
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          VERSION="${TAG_NAME#v}"
+
+          BRANCH_NAME="release-${VERSION}-to-${TARGET_BRANCH}"
+
+          # Ensure release branch doesn't already exist
+          if git rev-parse --verify "origin/$BRANCH_NAME" > /dev/null 2>&1; then
+            echo "Error: Release branch $BRANCH_NAME already exists."
+            exit 1
+          fi
+
+          git checkout -b "$BRANCH_NAME"
+
+          poetry version prerelease
+          git add pyproject.toml && git commit -m "Bump version"
+          git push origin "$BRANCH_NAME"
+
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: "Create Pull Request"
+        env:
+          # PRs created with GITHUB_TOKEN do not trigger workflows; pass GH_BOT_TOKEN (a PAT) to get CI on the PR.
+          # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
+          GH_TOKEN: "${{ secrets.GH_BOT_TOKEN || secrets.GITHUB_TOKEN }}"
+        run: |
+          gh pr create \
+            --title "Post release ${{ github.event.release.tag_name }} to ${{ steps.branch.outputs.target_branch }}" \
+            --body "Please do a merge commit." \
+            --base "${{ steps.branch.outputs.target_branch }}" \
+            --head "${{ steps.branch.outputs.branch_name }}"
+
+  sync-ltm-release-notes-to-develop:
+    if: "startsWith(github.event.release.target_commitish, 'ltm-')"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    name: "Sync release notes from ${{ github.event.release.target_commitish }} to develop"
+    runs-on: "ubuntu-latest"
+    needs:
+      - "publish-github"
+      - "publish-package"
+    steps:
+      - name: "Checkout develop"
+        uses: "actions/checkout@v7"
+        with:
+          ref: "develop"
+          fetch-depth: 0
+
+      - name: "Create branch and sync release notes from ltm"
+        id: "branch"
+        env:
+          RELEASE_NOTES_PATH: "${{ inputs.release_notes_path }}"
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+          SOURCE_BRANCH="${{ github.event.release.target_commitish }}"
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          BRANCH_NAME="release-${TAG_NAME#v}-notes-to-develop"
+
+          # Fetch the ltm source branch so we can checkout files from it
+          git fetch origin "$SOURCE_BRANCH"
+
+          # Ensure release branch doesn't already exist
+          if git rev-parse --verify "origin/$BRANCH_NAME" > /dev/null 2>&1; then
+            echo "Error: Release branch $BRANCH_NAME already exists."
+            exit 1
+          fi
+
+          git switch -c "$BRANCH_NAME"
+          git checkout "origin/$SOURCE_BRANCH" -- "$RELEASE_NOTES_PATH"
+
+          # Check if there are any changes in the release notes
+          if git diff --staged --quiet; then
+            echo "No release notes changes to sync from $SOURCE_BRANCH to develop."
+            exit 0
+          fi
+
+          git commit -m "Sync release notes from $SOURCE_BRANCH"
+          git push origin "$BRANCH_NAME"
+
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: "Create Pull Request"
+        if: "steps.branch.outputs.branch_name != ''"
+        env:
+          GH_TOKEN: "${{ secrets.GH_BOT_TOKEN || secrets.GITHUB_TOKEN }}"
+        run: |
+          gh pr create \
+            --title "Sync release notes from ${{ github.event.release.target_commitish }} (${{ github.event.release.tag_name }}) to develop" \
+            --body "Please do a merge commit." \
+            --base "develop" \
+            --head "${{ steps.branch.outputs.branch_name }}"
+
+  create-pr-to-next:
+    if: "github.event.release.target_commitish == 'main'"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    name: "Create a PR from main into next"
+    needs:
+      - "publish-github"
+      - "publish-package"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout main"
+        uses: "actions/checkout@v7"
+        with:
+          ref: "main"
+          fetch-depth: 0
+
+      - name: "Create release branch from main"
+        id: "branch"
+        run: |
+          # Skip if there is no 'next' branch to merge into.
+          if ! git ls-remote --exit-code --heads origin next > /dev/null 2>&1; then
+            echo "No 'next' branch exists; skipping main -> next PR."
+            exit 0
+          fi
+
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          VERSION="${TAG_NAME#v}"
+
+          BRANCH_NAME="release-${VERSION}-to-next"
+
+          # Ensure release branch doesn't already exist
+          if git rev-parse --verify "origin/$BRANCH_NAME" > /dev/null 2>&1; then
+            echo "Error: Release branch $BRANCH_NAME already exists."
+            exit 1
+          fi
+
+          # Base off main, since it's in the released state.
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME"
+
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: "Create a PR to next"
+        if: "steps.branch.outputs.branch_name != ''"
+        env:
+          GH_TOKEN: "${{ secrets.GH_BOT_TOKEN || secrets.GITHUB_TOKEN }}"
+        run: |
+          gh pr create \
+            --title "Post release ${{ github.event.release.tag_name }} to next" \
+            --body "Please do a merge commit." \
+            --base "next" \
+            --head "${{ steps.branch.outputs.branch_name }}"

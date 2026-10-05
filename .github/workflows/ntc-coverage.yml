@@ -1,0 +1,44 @@
+---
+# Reusable workflow that posts the coverage comment produced by the NTC CI workflow to the pull request.
+# Only nautobot-app projects produce the comment artifact today.
+#
+# Call it from a repo's .github/workflows/coverage.yml, triggered by `workflow_run` on the "CI" workflow.
+# The caller MUST grant: pull-requests: write, contents: write, actions: read.
+name: "NTC Post Coverage Comment"
+
+on:  # yamllint disable-line rule:truthy rule:comments
+  workflow_call:
+    inputs:
+      comment_artifact_name:
+        description: "Name of the artifact uploaded by the CI workflow that holds the comment."
+        required: false
+        type: "string"
+        default: "python-coverage-comment-action"
+      comment_filename:
+        description: "Name of the file inside the artifact that holds the comment."
+        required: false
+        type: "string"
+        default: "python-coverage-comment-action.txt"
+
+jobs:
+  post-comment:
+    name: "Post coverage comment to PR"
+    runs-on: "ubuntu-latest"
+    if: "github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'"
+    permissions:
+      # Publish new comments in pull requests.
+      pull-requests: "write"
+      # Edit existing comments (avoids publishing multiple comments on the same PR).
+      contents: "write"
+      # Look up the workflow that launched this workflow and download its comment artifact.
+      actions: "read"
+    steps:
+      # DO NOT run actions/checkout here, for security reasons.
+      # See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
+      - name: "Post comment"
+        uses: "py-cov-action/python-coverage-comment-action@d1ff8fbb5ff80feedb3faa0f6d7b424f417ad0e1"  # v3.30
+        with:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GITHUB_PR_RUN_ID: "${{ github.event.workflow_run.id }}"
+          COMMENT_ARTIFACT_NAME: "${{ inputs.comment_artifact_name }}"
+          COMMENT_FILENAME: "${{ inputs.comment_filename }}"

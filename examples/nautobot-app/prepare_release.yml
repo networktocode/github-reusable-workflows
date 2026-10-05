@@ -1,0 +1,41 @@
+---
+name: "Prepare Release"
+on:  # yamllint disable-line rule:truthy rule:comments
+  workflow_dispatch:
+    inputs:
+      bump_rule:
+        description: "Select the version bump type"
+        required: true
+        default: "patch"
+        type: "choice"
+        options:
+          - "prerelease"
+          - "patch"
+          - "minor"
+          - "major"
+      target_branch:
+        description: "Create the release from this branch (default: main)."
+        required: true
+        default: "main"
+      date:
+        description: "Date of the release YYYY-MM-DD (defaults to today's date in the US Eastern TZ)."
+        required: false
+        default: ""
+      previous_version:
+        description: "The previous version tag to use for generating release notes (defaults to the latest tag or initial commit if no tags exist)."
+        required: false
+        default: ""
+
+jobs:
+  prepare-release:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-prepare-release.yml@v1"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    with:
+      bump_rule: "${{ inputs.bump_rule }}"
+      target_branch: "${{ inputs.target_branch }}"
+      date: "${{ inputs.date }}"
+      previous_version: "${{ inputs.previous_version }}"
+    secrets:
+      GH_BOT_TOKEN: "${{ secrets.GH_NAUTOBOT_BOT_TOKEN }}"

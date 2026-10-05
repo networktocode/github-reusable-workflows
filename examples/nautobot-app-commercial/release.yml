@@ -1,0 +1,21 @@
+---
+name: "Release"
+on:  # yamllint disable-line rule:truthy rule:comments
+  release:
+    types: ["published"]
+
+jobs:
+  release:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-release.yml@v1"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+      id-token: "write"
+    with:
+      publish_target: "artifactory"
+      publish_environment: "artifactory"
+      artifactory_url: "${{ vars.ARTIFACTORY_URL }}"
+    secrets:
+      GH_BOT_TOKEN: "${{ secrets.NTC_LLC_NAUTOBOT_APPS_REPO_WORKFLOW_GH_TOKEN }}"
+      ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+      ARTIFACTORY_PASSWORD: "${{ secrets.ARTIFACTORY_PASSWORD }}"

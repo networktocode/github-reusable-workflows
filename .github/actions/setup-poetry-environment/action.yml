@@ -1,0 +1,71 @@
+---
+# Imported from networktocode/gh-action-setup-poetry-environment@v7.2 (whitespace/quoting normalised only)
+# (commit c31e438e32194e3ef5779152713dd570f2dfc511). Referenced as
+# networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@<ref>
+name: "Setup the environment"
+description: "This action creates the Poetry environment and load virtual environment from cache if cache exists."
+inputs:
+  poetry-install-options:
+    description: "Options pass to the poetry install command"
+    required: false
+    default: "--only dev"
+  poetry-version:
+    description: "Poetry version that will be deployed. Leave blank for latest. Example: 1.4.2"
+    required: false
+    default: ""
+  python-version:
+    description: "Python version that will be deployed"
+    required: false
+    default: "3.11"
+  cache-version:
+    description: "Cache version for the environment, can be used to invalidate the current cache"
+    required: false
+    default: ""
+outputs:
+  cache-used:
+    description: "The property that defines if cache was used"
+    value: "${{ steps.cached-poetry.outputs.cache-hit }}"
+  python-version:
+    description: "Exact python version used"
+    value: "${{ steps.python-setup.outputs.python-version }}"
+runs:
+  using: "composite"
+  steps:
+    - name: "Set up Python"
+      uses: "actions/setup-python@v6"
+      id: "python-setup"
+      with:
+        python-version: "${{ inputs.python-version }}"
+    - name: "Log: Install Poetry"
+      run: "echo Installing Poetry"
+      shell: "bash"
+    - name: "Install Poetry"
+      run: |
+        if [ -z "${{ inputs.poetry-version }}" ]
+        then
+          pipx install poetry
+        else
+          pipx install poetry==${{ inputs.poetry-version }}
+        fi
+      env:
+        PIPX_DEFAULT_PYTHON: "${{ steps.python-setup.outputs.python-path }}"
+      shell: "bash"
+    - name: "Add poetry to PATH"
+      run: "ln -s /root/.local/bin/poetry /usr/local/bin/poetry"
+      shell: "bash"
+    - name: "Install Virtualenv compatible with Poetry 1.X"
+      if: "startsWith(inputs.poetry-version, '1.')"
+      run: "poetry self add virtualenv@20.30.0"
+      shell: "bash"
+    - name: "Log: Check cache"
+      run: "echo Checking cache"
+      shell: "bash"
+    - name: "Cache"
+      uses: "actions/cache@v5"
+      id: "cached-poetry"
+      with:
+        path: "~/.cache/pypoetry/virtualenvs/"
+        key: "${{ runner.os }}-poetry-${{ steps.python-setup.outputs.python-version }}-${{ hashFiles('./poetry.lock') }}${{ inputs.cache-version }}"
+    - name: "Install environment"
+      run: "poetry install ${{ inputs.poetry-install-options }}"
+      shell: "bash"

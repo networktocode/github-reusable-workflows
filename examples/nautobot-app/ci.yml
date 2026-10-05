@@ -1,0 +1,33 @@
+---
+name: "CI"
+concurrency:  # Cancel any existing runs of this workflow for this same PR
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+on:  # yamllint disable-line rule:truthy rule:comments
+  push:
+    branches:
+      - "main"
+      - "develop"
+      - "ltm-1.6"
+  pull_request: ~
+
+jobs:
+  ci:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-ci.yml@v1"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    with:
+      project_type: "nautobot-app"
+      project_name: "nautobot-golden-config"
+      min_nautobot_version: "3.1.0"
+      changelog_base_branches: >-
+        ["develop", "ltm-1.6"]
+      # Optional overrides (defaults shown):
+      # invoke_context_name: "NAUTOBOT_GOLDEN_CONFIG"
+      # min_python_version: "3.10"
+      # max_python_version: "3.14"
+      # poetry_version: "2.1.3"
+      # unittest_runner: "ubuntu-latest"
+      # coverage_minimum_green: 90
+      # coverage_minimum_orange: 80

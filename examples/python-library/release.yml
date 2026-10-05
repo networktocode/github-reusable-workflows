@@ -1,0 +1,20 @@
+---
+name: "Release"
+on:  # yamllint disable-line rule:truthy rule:comments
+  release:
+    types: ["published"]
+
+jobs:
+  release:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-release.yml@v1"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+      id-token: "write"  # Required for PyPI Trusted Publishing
+    with:
+      build_docs: false  # Docs are built by Read the Docs
+      # python_version: "3.13"
+    secrets:
+      SLACK_WEBHOOK_URL: "${{ secrets.OSS_PYPI_SLACK_WEBHOOK_URL }}"
+      # Without GH_BOT_TOKEN the post-release PR is opened with GITHUB_TOKEN and does not trigger CI.
+      # GH_BOT_TOKEN: "${{ secrets.GH_NTC_BOT_TOKEN }}"

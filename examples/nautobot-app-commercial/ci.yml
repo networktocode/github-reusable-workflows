@@ -1,0 +1,26 @@
+---
+name: "CI"
+concurrency:  # Cancel any existing runs of this workflow for this same PR
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+on:  # yamllint disable-line rule:truthy rule:comments
+  push:
+    branches:
+      - "main"
+      - "develop"
+  pull_request: ~
+
+jobs:
+  ci:
+    uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-ci.yml@v1"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    with:
+      project_type: "nautobot-app"
+      project_name: "nautobot-my-commercial-app"
+      min_nautobot_version: "3.0.0"
+    secrets:
+      # Credentials for the private "artifactory-pypi" Poetry source declared in pyproject.toml.
+      ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+      ARTIFACTORY_PASSWORD: "${{ secrets.ARTIFACTORY_PASSWORD }}"

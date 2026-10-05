@@ -1,0 +1,73 @@
+---
+# CI for this repository: lint the reusable workflows and the caller examples.
+name: "CI"
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+on:  # yamllint disable-line rule:truthy rule:comments
+  push:
+    branches:
+      - "main"
+  pull_request: ~
+
+permissions:
+  contents: "read"
+
+jobs:
+  yamllint:
+    name: "Linting: yamllint"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out repository code"
+        uses: "actions/checkout@v7"
+      - name: "Set up Python"
+        uses: "actions/setup-python@v6"
+        with:
+          python-version: "3.12"
+      - name: "Install yamllint"
+        run: "pip install yamllint"
+      - name: "Linting: yamllint"
+        run: "yamllint --strict ."
+
+  actionlint:
+    name: "Linting: actionlint"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out repository code"
+        uses: "actions/checkout@v7"
+      - name: "Install actionlint"
+        run: "bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 /usr/local/bin"
+      - name: "Linting: actionlint (reusable workflows)"
+        run: "actionlint -color"
+      # The caller examples live outside .github/workflows, so lint them explicitly.
+      - name: "Linting: actionlint (caller examples)"
+        run: "actionlint -color examples/*/*.yml"
+
+  action-smoke-test:
+    name: "Smoke test: setup-poetry-environment"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out repository code"
+        uses: "actions/checkout@v7"
+      # The action installs whatever Poetry project sits in the workspace root, so borrow a real NTC project.
+      - name: "Check out a Poetry project to install"
+        uses: "actions/checkout@v7"
+        with:
+          repository: "networktocode/netutils"
+          ref: "develop"
+          path: "project"
+      - name: "Place the project files in the workspace root"
+        run: "cp project/pyproject.toml project/poetry.lock ."
+      - name: "Run the action from this branch"
+        id: "setup"
+        uses: "./.github/actions/setup-poetry-environment"
+        with:
+          poetry-version: "2.1.3"
+          python-version: "3.12"
+          poetry-install-options: "--only dev --no-root"
+      - name: "Verify the environment"
+        run: |
+          poetry --version
+          poetry run ruff --version
+          echo "python-version output: ${{ steps.setup.outputs.python-version }}"
+          echo "cache-used output: ${{ steps.setup.outputs.cache-used }}"
