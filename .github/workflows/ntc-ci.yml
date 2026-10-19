@@ -9,7 +9,7 @@
 #
 #   jobs:
 #     ci:
-#       uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-ci.yml@v1"
+#       uses: "networktocode/github-reusable-workflows/.github/workflows/ntc-ci.yml@main"
 #       with:
 #         project_type: "nautobot-app"
 #         project_name: "nautobot-golden-config"
@@ -244,7 +244,7 @@ jobs:
         uses: "actions/checkout@v7"
       - name: "Setup environment"
         if: "needs.config.outputs.regenerate_lockfile == 'true'"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
           poetry-install-options: "--only-root"
@@ -277,7 +277,7 @@ jobs:
         with:
           name: "poetry-lock"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
       - name: "Linting: ${{ matrix.check }}"
@@ -301,7 +301,7 @@ jobs:
         with:
           name: "poetry-lock"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
           poetry-install-options: "--only dev,docs"
@@ -320,7 +320,7 @@ jobs:
       - name: "Check out repository code"
         uses: "actions/checkout@v7"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
       - name: "Checking: poetry lock file"
@@ -344,7 +344,7 @@ jobs:
       - name: "Check out repository code"
         uses: "actions/checkout@v7"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
       - name: "Configure invoke environment and image tag"
@@ -427,7 +427,7 @@ jobs:
       - name: "Check out repository code"
         uses: "actions/checkout@v7"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
           # Libraries run pytest locally, so the host interpreter must match the matrix entry.
@@ -497,7 +497,7 @@ jobs:
       - name: "Check out repository code"
         uses: "actions/checkout@v7"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
       - name: "Constrain Nautobot version and regenerate lock file"
@@ -563,7 +563,7 @@ jobs:
         with:
           name: "poetry-lock"
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
       - name: "Check for changelog entry"

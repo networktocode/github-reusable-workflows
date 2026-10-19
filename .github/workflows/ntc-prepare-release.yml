@@ -76,7 +76,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for git tags
 
       - name: "Setup environment"
-        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@v1"
+        uses: "networktocode/github-reusable-workflows/.github/actions/setup-poetry-environment@main"
         with:
           poetry-version: "${{ inputs.poetry_version }}"
           poetry-install-options: "--with dev"

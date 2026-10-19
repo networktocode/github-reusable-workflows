@@ -1,5 +1,5 @@
 ---
-# Keeps the floating major tag (v1, v2, ...) pointing at the newest release so callers can pin `@v1`.
+# Keeps the floating major tag (v1, v2, ...) pointing at the newest release so callers can pin `@main`.
 name: "Update major version tag"
 on:  # yamllint disable-line rule:truthy rule:comments
   release:
