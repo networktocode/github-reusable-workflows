@@ -9,14 +9,9 @@ on:  # yamllint disable-line rule:truthy rule:comments
   workflow_call:
     inputs:
       project_name:
-        description: "Distribution name of the app (e.g. nautobot-golden-config)."
+        description: "Distribution name of the app (e.g. nautobot-golden-config). INVOKE_<NAME>_* env vars use it upper-cased with '-' replaced by '_'."
         required: true
         type: "string"
-      invoke_context_name:
-        description: "Invoke context name used for INVOKE_<NAME>_* env vars. Defaults to project_name upper-cased with '-' replaced by '_'."
-        required: false
-        type: "string"
-        default: ""
       matrix:
         description: "JSON list of {nautobot_branch, app_branch} pairs to test."
         required: false
@@ -38,11 +33,8 @@ jobs:
         id: "resolve"
         env:
           PROJECT_NAME: "${{ inputs.project_name }}"
-          INVOKE_CONTEXT_NAME: "${{ inputs.invoke_context_name }}"
         run: |
-          if [ -z "$INVOKE_CONTEXT_NAME" ]; then
-            INVOKE_CONTEXT_NAME=$(echo "$PROJECT_NAME" | tr '[:lower:]-' '[:upper:]_')
-          fi
+          INVOKE_CONTEXT_NAME=$(echo "$PROJECT_NAME" | tr '[:lower:]-' '[:upper:]_')
           echo "invoke_context_name=$INVOKE_CONTEXT_NAME" >> "$GITHUB_OUTPUT"
 
   upstream-test:

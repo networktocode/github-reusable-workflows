@@ -96,8 +96,7 @@ What `project_type` changes:
 | Input | Default | Purpose |
 | --- | --- | --- |
 | `project_type` | required | `nautobot-app` or `python-library`. |
-| `project_name` | required | Distribution / image name, e.g. `nautobot-golden-config`, `pyntc`. |
-| `invoke_context_name` | derived | `INVOKE_<NAME>_*` env var prefix. Defaults to `project_name` upper-cased with `-` replaced by `_`. |
+| `project_name` | required | Distribution / image name, e.g. `nautobot-golden-config`, `pyntc`. The `INVOKE_<NAME>_*` env var prefix is `project_name` upper-cased with `-` replaced by `_`. |
 | `min_nautobot_version` | `""` | Apps (required): lowest supported Nautobot version. |
 | `min_python_version` | `"3.10"` | Lowest supported Python. |
 | `max_python_version` | `"3.14"` | Highest supported Python. |
@@ -176,8 +175,7 @@ so the matrix and the pinned Nautobot workflow ref live in one place.
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `project_name` | required | Distribution name of the app. |
-| `invoke_context_name` | derived | As in the CI workflow. |
+| `project_name` | required | Distribution name of the app; the `INVOKE_<NAME>_*` prefix is derived from it as in the CI workflow. |
 | `matrix` | develop/main and next/main | JSON list of `{"nautobot_branch": ..., "app_branch": ...}` pairs. |
 
 ## Composite actions

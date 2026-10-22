@@ -26,14 +26,9 @@ on:  # yamllint disable-line rule:truthy rule:comments
         required: true
         type: "string"
       project_name:
-        description: "Distribution / image name (e.g. nautobot-golden-config, pyntc, netutils)."
+        description: "Distribution / image name (e.g. nautobot-golden-config, pyntc, netutils). INVOKE_<NAME>_* env vars use it upper-cased with '-' replaced by '_'."
         required: true
         type: "string"
-      invoke_context_name:
-        description: "Invoke context name used for INVOKE_<NAME>_* env vars. Defaults to project_name upper-cased with '-' replaced by '_'."
-        required: false
-        type: "string"
-        default: ""
       min_nautobot_version:
         description: "nautobot-app only (required): lowest supported Nautobot version, used for the docker checks and the minimum unit test run."
         required: false
@@ -135,7 +130,6 @@ jobs:
       - name: "Resolve invoke context, matrices and PR type"
         id: "resolve"
         env:
-          INVOKE_CONTEXT_NAME: "${{ inputs.invoke_context_name }}"
           MIN_NAUTOBOT_VERSION: "${{ inputs.min_nautobot_version }}"
           MIN_PYTHON_VERSION: "${{ inputs.min_python_version }}"
           MAX_PYTHON_VERSION: "${{ inputs.max_python_version }}"
@@ -163,9 +157,7 @@ jobs:
             *) echo "::error::project_type must be 'nautobot-app' or 'python-library' (got '$PROJECT_TYPE')"; exit 1 ;;
           esac
 
-          if [ -z "$INVOKE_CONTEXT_NAME" ]; then
-            INVOKE_CONTEXT_NAME=$(echo "$PROJECT_NAME" | tr '[:lower:]-' '[:upper:]_')
-          fi
+          INVOKE_CONTEXT_NAME=$(echo "$PROJECT_NAME" | tr '[:lower:]-' '[:upper:]_')
 
           if [ -z "$REGENERATE_LOCKFILE" ]; then
             [ "$PROJECT_TYPE" = "nautobot-app" ] && REGENERATE_LOCKFILE="true" || REGENERATE_LOCKFILE="false"
@@ -368,7 +360,7 @@ jobs:
       - name: "Constrain Nautobot version and regenerate lock file"
         if: "inputs.project_type == 'nautobot-app'"
         run: >-
-          INVOKE_${INVOKE_CONTEXT_NAME}_LOCAL=true
+          env "INVOKE_${INVOKE_CONTEXT_NAME}_LOCAL=true"
           poetry run invoke lock --constrain-nautobot-ver --constrain-python-ver="$PYTHON_VERSION"
       - name: "Set up Docker Buildx"
         id: "buildx"
