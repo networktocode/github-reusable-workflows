@@ -429,7 +429,7 @@ jobs:
       - name: "Constrain Nautobot version and regenerate lock file"
         if: "inputs.project_type == 'nautobot-app'"
         run: >-
-          INVOKE_${INVOKE_CONTEXT_NAME}_LOCAL=true
+          env "INVOKE_${INVOKE_CONTEXT_NAME}_LOCAL=true"
           poetry run invoke lock --constrain-nautobot-ver --constrain-python-ver="$PYTHON_VERSION"
       - name: "Set up Docker Buildx"
         if: "inputs.project_type == 'nautobot-app'"
@@ -494,7 +494,7 @@ jobs:
           poetry-version: "${{ inputs.poetry_version }}"
       - name: "Constrain Nautobot version and regenerate lock file"
         run: >-
-          INVOKE_${INVOKE_CONTEXT_NAME}_LOCAL=true
+          env "INVOKE_${INVOKE_CONTEXT_NAME}_LOCAL=true"
           poetry run invoke lock --constrain-nautobot-ver --constrain-python-ver="$PYTHON_VERSION"
       - name: "Set up Docker Buildx"
         id: "buildx"
